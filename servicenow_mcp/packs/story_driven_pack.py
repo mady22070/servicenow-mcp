@@ -2,102 +2,257 @@
 Story-Driven Development Pack - Convert user stories into executable development plans
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, NamedTuple
 from ..servicenow_client import ServiceNowClient
 import re
 import json
+from dataclasses import dataclass
+from enum import Enum
+
+
+class StoryFormat(Enum):
+    """Enumeration of supported user story formats."""
+    USER_STORY = "user_story"
+    INFORMAL_STORY = "informal_story"
+    REQUIREMENT = "requirement"
+
+
+@dataclass
+class StoryComponents:
+    """Data class for user story components."""
+    user: str
+    goal: str
+    benefit: str
+
+
+@dataclass
+class ValidationResult:
+    """Data class for story validation results."""
+    is_complete: bool
+    missing_elements: List[str]
+    recommendations: List[str]
+    confidence_score: float
+
+
+class RequirementCategory(Enum):
+    """Categories of technical requirements."""
+    DATA_MODEL = "data_model"
+    BUSINESS_LOGIC = "business_logic"
+    USER_INTERFACE = "user_interface"
+    INTEGRATIONS = "integrations"
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+
+
+# Configuration constants
+CONFIDENCE_THRESHOLD = 0.75
+DEFAULT_ESTIMATED_HOURS = {
+    "analysis": 2,
+    "development": 4,
+    "testing": 3,
+    "deployment": 1
+}
+
+# Keyword mappings for requirement extraction
+REQUIREMENT_KEYWORDS = {
+    RequirementCategory.DATA_MODEL: {
+        "create_store": ["create", "store", "save", "record", "data"],
+        "form_fields": ["form", "field", "input", "capture"]
+    },
+    RequirementCategory.BUSINESS_LOGIC: {
+        "calculations": ["calculate", "compute", "determine", "validate"],
+        "workflows": ["workflow", "approval", "process", "route"],
+        "notifications": ["notify", "email", "alert", "message"]
+    },
+    RequirementCategory.USER_INTERFACE: {
+        "display": ["view", "display", "show", "interface", "portal"],
+        "reporting": ["report", "dashboard", "chart", "analytics"]
+    },
+    RequirementCategory.INTEGRATIONS: {
+        "external": ["integrate", "api", "external", "third-party"]
+    },
+    RequirementCategory.SECURITY: {
+        "access": ["secure", "permission", "access", "role"]
+    },
+    RequirementCategory.PERFORMANCE: {
+        "optimization": ["fast", "quick", "performance", "scale"]
+    }
+}
 
 def parse_user_story(story: str) -> Dict[str, Any]:
     """
     Parse user story using standard format: As a [user], I want [goal] so that [benefit]
+    
+    Args:
+        story: The user story text to parse
+        
+    Returns:
+        Dictionary containing parsing results with success status and components
     """
-    parsed = {
-        "original": story,
-        "format": "unknown",
-        "components": {},
-        "valid": False
-    }
+    if not story or not story.strip():
+        return _create_error_response("Empty story provided", story)
+    
+    story_lower = story.lower().strip()
     
     # Try to match standard user story format
     user_story_pattern = r"as\s+a\s+(.+?),?\s+i\s+want\s+(.+?)\s+so\s+that\s+(.+)"
-    match = re.search(user_story_pattern, story.lower())
+    match = re.search(user_story_pattern, story_lower)
     
     if match:
-        parsed["format"] = "user_story"
-        parsed["components"] = {
-            "user": match.group(1).strip(),
-            "goal": match.group(2).strip(), 
-            "benefit": match.group(3).strip()
+        components = StoryComponents(
+            user=match.group(1).strip(),
+            goal=match.group(2).strip(),
+            benefit=match.group(3).strip()
+        )
+        
+        return {
+            "success": True,
+            "original": story,
+            "format": StoryFormat.USER_STORY.value,
+            "components": {
+                "user": components.user,
+                "goal": components.goal,
+                "benefit": components.benefit
+            }
         }
-        parsed["valid"] = True
-    else:
-        # Try alternative formats
-        if "i want" in story.lower() or "i need" in story.lower():
-            parsed["format"] = "informal_story"
-            parsed["components"]["goal"] = story
-            parsed["valid"] = True
-        else:
-            parsed["format"] = "requirement"
-            parsed["components"]["requirement"] = story
     
-    return parsed
+    # Provide specific error messages for partial matches
+    return _analyze_partial_story_match(story_lower, story)
+
+
+def _create_error_response(error_message: str, original_story: str) -> Dict[str, Any]:
+    """Create a standardized error response."""
+    return {
+        "success": False,
+        "error": error_message,
+        "original": original_story
+    }
+
+
+def _analyze_partial_story_match(story_lower: str, original_story: str) -> Dict[str, Any]:
+    """Analyze partial story matches and provide specific error messages."""
+    has_as_a = "as a" in story_lower
+    has_i_want = "i want" in story_lower
+    has_so_that = "so that" in story_lower
+    
+    if has_as_a and has_i_want and not has_so_that:
+        return _create_error_response(
+            "Missing 'so that' benefit clause in user story", 
+            original_story
+        )
+    elif has_i_want and not has_as_a:
+        return _create_error_response(
+            "Missing user persona - story should start with 'As a [user]'", 
+            original_story
+        )
+    elif has_as_a and not has_i_want:
+        return _create_error_response(
+            "Missing goal statement - include 'I want [goal]'", 
+            original_story
+        )
+    else:
+        return _create_error_response(
+            "Invalid user story format. Expected: 'As a [user], I want [goal] so that [benefit]'", 
+            original_story
+        )
 
 def extract_technical_requirements(client: ServiceNowClient, story_components: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Extract technical requirements from story components
+    Extract technical requirements from story components using keyword analysis.
+    
+    Args:
+        client: ServiceNow client instance
+        story_components: Parsed story components
+        
+    Returns:
+        Dictionary of categorized technical requirements
     """
-    requirements = {
-        "data_model": [],
-        "business_logic": [],
-        "user_interface": [],
-        "integrations": [],
-        "security": [],
-        "performance": []
+    if not story_components:
+        return {"error": "No story components provided"}
+    
+    # Combine all story text for analysis
+    full_text = _combine_story_text(story_components)
+    
+    # Initialize requirements structure
+    requirements = {category.value: [] for category in RequirementCategory}
+    
+    # Extract requirements by category
+    for category in RequirementCategory:
+        category_requirements = _extract_category_requirements(category, full_text)
+        requirements[category.value].extend(category_requirements)
+    
+    return {
+        "technical_requirements": requirements,
+        "functional_requirements": _extract_functional_requirements(story_components)
     }
+
+
+def _combine_story_text(story_components: Dict[str, Any]) -> str:
+    """Combine story components into searchable text."""
+    goal = story_components.get("goal", "")
+    user = story_components.get("user", "")
+    benefit = story_components.get("benefit", "")
+    return f"{goal} {user} {benefit}".lower()
+
+
+def _extract_category_requirements(category: RequirementCategory, full_text: str) -> List[str]:
+    """Extract requirements for a specific category."""
+    requirements = []
+    category_keywords = REQUIREMENT_KEYWORDS.get(category, {})
     
-    goal = story_components.get("goal", "").lower()
-    user = story_components.get("user", "").lower()
-    benefit = story_components.get("benefit", "").lower()
-    
-    full_text = f"{goal} {user} {benefit}".lower()
-    
-    # Data model requirements
-    if any(word in full_text for word in ["create", "store", "save", "record", "data"]):
-        requirements["data_model"].append("New table or fields may be required")
-    
-    if any(word in full_text for word in ["form", "field", "input", "capture"]):
-        requirements["data_model"].append("Form modifications needed")
-    
-    # Business logic requirements  
-    if any(word in full_text for word in ["calculate", "compute", "determine", "validate"]):
-        requirements["business_logic"].append("Business rules or script includes needed")
-    
-    if any(word in full_text for word in ["workflow", "approval", "process", "route"]):
-        requirements["business_logic"].append("Workflow or flow designer implementation")
-    
-    if any(word in full_text for word in ["notify", "email", "alert", "message"]):
-        requirements["business_logic"].append("Notification system integration")
-    
-    # UI requirements
-    if any(word in full_text for word in ["view", "display", "show", "interface", "portal"]):
-        requirements["user_interface"].append("UI modifications or new interfaces")
-    
-    if any(word in full_text for word in ["report", "dashboard", "chart", "analytics"]):
-        requirements["user_interface"].append("Reporting or analytics components")
-    
-    # Integration requirements
-    if any(word in full_text for word in ["integrate", "api", "external", "third-party"]):
-        requirements["integrations"].append("External system integration")
-    
-    # Security requirements
-    if any(word in full_text for word in ["secure", "permission", "access", "role"]):
-        requirements["security"].append("Access control and security considerations")
-    
-    # Performance requirements
-    if any(word in full_text for word in ["fast", "quick", "performance", "scale"]):
-        requirements["performance"].append("Performance optimization needed")
+    for requirement_type, keywords in category_keywords.items():
+        if any(keyword in full_text for keyword in keywords):
+            requirement_text = _get_requirement_text(category, requirement_type)
+            if requirement_text:
+                requirements.append(requirement_text)
     
     return requirements
+
+
+def _get_requirement_text(category: RequirementCategory, requirement_type: str) -> str:
+    """Get descriptive text for a requirement type."""
+    requirement_descriptions = {
+        RequirementCategory.DATA_MODEL: {
+            "create_store": "New table or fields may be required",
+            "form_fields": "Form modifications needed"
+        },
+        RequirementCategory.BUSINESS_LOGIC: {
+            "calculations": "Business rules or script includes needed",
+            "workflows": "Workflow or flow designer implementation",
+            "notifications": "Notification system integration"
+        },
+        RequirementCategory.USER_INTERFACE: {
+            "display": "UI modifications or new interfaces",
+            "reporting": "Reporting or analytics components"
+        },
+        RequirementCategory.INTEGRATIONS: {
+            "external": "External system integration"
+        },
+        RequirementCategory.SECURITY: {
+            "access": "Access control and security considerations"
+        },
+        RequirementCategory.PERFORMANCE: {
+            "optimization": "Performance optimization needed"
+        }
+    }
+    
+    return requirement_descriptions.get(category, {}).get(requirement_type, "")
+
+
+def _extract_functional_requirements(story_components: Dict[str, Any]) -> List[str]:
+    """Extract functional requirements from story components."""
+    functional_requirements = []
+    
+    goal = story_components.get("goal", "")
+    benefit = story_components.get("benefit", "")
+    
+    if goal:
+        functional_requirements.append(f"System must: {goal}")
+    
+    if benefit:
+        functional_requirements.append(f"Expected outcome: {benefit}")
+    
+    return functional_requirements
 
 def generate_implementation_tasks(client: ServiceNowClient, requirements: Dict[str, Any], 
                                 story_context: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -333,35 +488,35 @@ def validate_story_completeness(story_analysis: Dict[str, Any]) -> Dict[str, Any
         "is_complete": True,
         "missing_elements": [],
         "recommendations": [],
-        "confidence_score": 0.0
+        "score": 0.0
     }
     
     components = story_analysis.get("components", {})
     
     # Check for essential components
-    if not components.get("user"):
+    if not components.get("user") or len(components.get("user", "").strip()) < 3:
         validation["missing_elements"].append("user_persona")
         validation["recommendations"].append("Specify who will use this feature")
     
-    if not components.get("goal"):
+    if not components.get("goal") or len(components.get("goal", "").strip()) < 5:
         validation["missing_elements"].append("goal_definition")
         validation["recommendations"].append("Clearly define what the user wants to accomplish")
     
-    if not components.get("benefit"):
+    if not components.get("benefit") or len(components.get("benefit", "").strip()) < 5:
         validation["missing_elements"].append("business_value")
         validation["recommendations"].append("Explain the business value or benefit")
     
     # Check for technical clarity
     goal = components.get("goal", "").lower()
-    if not any(word in goal for word in ["create", "update", "delete", "view", "manage", "process"]):
+    if not any(word in goal for word in ["create", "update", "delete", "view", "manage", "process", "assign", "route", "automatically"]):
         validation["missing_elements"].append("action_clarity")
         validation["recommendations"].append("Use clear action verbs (create, update, view, etc.)")
     
     # Calculate confidence score
     total_checks = 4
     passed_checks = total_checks - len(validation["missing_elements"])
-    validation["confidence_score"] = passed_checks / total_checks
+    validation["score"] = passed_checks / total_checks
     
-    validation["is_complete"] = validation["confidence_score"] >= 0.75
+    validation["is_complete"] = validation["score"] >= 0.75
     
     return validation
