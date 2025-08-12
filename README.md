@@ -75,13 +75,25 @@ export MCP_ALLOW_TABLES=sys_script,sys_script_include,ui_policy,ui_policy_action
 
 ## 🚀 Quick Start
 
+### For Claude Desktop Users (Most Common)
+
+**👉 [Follow the Complete Claude Desktop Setup Guide](docs/claude-setup-guide.md)**
+
+**Quick Summary:**
+1. Clone this repository and install dependencies
+2. Configure your ServiceNow credentials in `.env` file
+3. Add MCP server to Claude Desktop configuration
+4. Restart Claude Desktop and start using ServiceNow with AI!
+
+### For Developers
+
 ### 1. Start the MCP Server
 ```bash
 python mcp_adapter.py
 ```
 
 ### 2. Configure Your MCP Client
-Add to your MCP client configuration (e.g., Claude Desktop):
+Add to your MCP client configuration:
 
 ```json
 {
@@ -201,11 +213,11 @@ python -c "from servicenow_mcp.config import Config; print(Config.for_env('dev')
 
 ## 📚 Documentation
 
+- **[Claude Desktop Setup Guide](docs/claude-setup-guide.md)** - Complete step-by-step setup for Claude Desktop
+- **[Quick Reference](docs/claude-quick-reference.md)** - Common commands and usage examples
 - [API Reference](docs/api-reference.md) - Complete tool documentation
 - [Configuration Guide](docs/configuration.md) - Setup and environment management
-- [Development Guide](docs/development.md) - Contributing and extending
 - [Examples](examples/) - Real-world usage scenarios
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
 ## 🤝 Contributing
 
