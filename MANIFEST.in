@@ -1,0 +1,24 @@
+# Include important documentation files
+include README.md
+include LICENSE
+include CONTRIBUTING.md
+include CHANGELOG.md
+include requirements*.txt
+
+# Include package data
+include servicenow_mcp/py.typed
+
+# Include examples and documentation
+recursive-include examples *.md
+recursive-include docs *.md *.rst
+
+# Exclude development and build artifacts
+exclude .gitignore
+exclude .pre-commit-config.yaml
+exclude doctor.py
+exclude mcp_adapter.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store
+recursive-exclude .venv *
+recursive-exclude .kiro *

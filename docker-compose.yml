@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  servicenow-mcp:
+    build: .
+    container_name: servicenow-mcp
+    environment:
+      # ServiceNow Configuration
+      - SERVICENOW_DEV_INSTANCE_URL=${SERVICENOW_DEV_INSTANCE_URL}
+      - SERVICENOW_DEV_USERNAME=${SERVICENOW_DEV_USERNAME}
+      - SERVICENOW_DEV_PASSWORD=${SERVICENOW_DEV_PASSWORD}
+      
+      # Optional: Test Environment
+      - SERVICENOW_TEST_INSTANCE_URL=${SERVICENOW_TEST_INSTANCE_URL:-}
+      - SERVICENOW_TEST_USERNAME=${SERVICENOW_TEST_USERNAME:-}
+      - SERVICENOW_TEST_PASSWORD=${SERVICENOW_TEST_PASSWORD:-}
+      
+      # Optional: Production Environment
+      - SERVICENOW_PROD_INSTANCE_URL=${SERVICENOW_PROD_INSTANCE_URL:-}
+      - SERVICENOW_PROD_USERNAME=${SERVICENOW_PROD_USERNAME:-}
+      - SERVICENOW_PROD_PASSWORD=${SERVICENOW_PROD_PASSWORD:-}
+      
+      # MCP Configuration
+      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
+      - MCP_ALLOW_TABLES=${MCP_ALLOW_TABLES:-}
+      - MCP_CONNECTION_TIMEOUT=${MCP_CONNECTION_TIMEOUT:-30}
+      - MCP_REQUEST_TIMEOUT=${MCP_REQUEST_TIMEOUT:-60}
+      - MCP_CACHE_TTL=${MCP_CACHE_TTL:-300}
+    volumes:
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount cache directory
+      - ./cache:/app/cache
+      # Mount configuration (optional)
+      - ./config:/app/config:ro
+    ports:
+      # Expose port if running as HTTP server
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "from servicenow_mcp.client_manager import client_manager; client_manager.health_check()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - servicenow-mcp-network
+
+  # Optional: Redis for caching (if implementing Redis caching)
+  redis:
+    image: redis:7-alpine
+    container_name: servicenow-mcp-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - servicenow-mcp-network
+    profiles:
+      - redis
+
+  # Optional: Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: servicenow-mcp-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    networks:
+      - servicenow-mcp-network
+    profiles:
+      - monitoring
+
+  # Optional: Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: servicenow-mcp-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    restart: unless-stopped
+    networks:
+      - servicenow-mcp-network
+    profiles:
+      - monitoring
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  servicenow-mcp-network:
+    driver: bridge
