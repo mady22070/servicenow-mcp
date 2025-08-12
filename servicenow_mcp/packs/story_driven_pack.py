@@ -478,7 +478,18 @@ class TaskGenerator:
 def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]], 
                          story_context: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Create an executable plan with specific ServiceNow operations
+    Create an executable plan with specific ServiceNow operations.
+    
+    Args:
+        client: ServiceNow client instance
+        tasks: List of implementation tasks
+        story_context: Original story context and metadata
+        
+    Returns:
+        Dictionary containing executable plan with phases, steps, and criteria
+        
+    Raises:
+        ValueError: If tasks or story_context is invalid
     """
     plan = {
         "story_reference": story_context.get("original", ""),
@@ -703,3 +714,91 @@ def _validate_action_clarity(components: Dict[str, Any]) -> Dict[str, Any]:
         "element": "action_clarity",
         "recommendation": f"Use clear action verbs in the goal: {', '.join(action_verbs[:5])}, etc."
     }
+
+
+def story_to_implementation(client: ServiceNowClient, story: str, 
+                          validate_first: bool = True) -> Dict[str, Any]:
+    """
+    Complete story-to-implementation pipeline.
+    
+    This is the main entry point that orchestrates the entire process from
+    user story parsing to executable implementation plan generation.
+    
+    Args:
+        client: ServiceNow client instance
+        story: User story text to process
+        validate_first: Whether to validate story completeness before processing
+        
+    Returns:
+        Dictionary containing complete analysis and implementation plan
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Starting story-to-implementation pipeline for: {story[:50]}...")
+        
+        # Step 1: Parse the user story
+        parsed_story = parse_user_story(story)
+        if not parsed_story.get("success"):
+            return {
+                "status": "error",
+                "stage": "parsing",
+                "error": parsed_story.get("error"),
+                "original_story": story
+            }
+        
+        # Step 2: Validate story completeness (optional)
+        if validate_first:
+            validation = validate_story_completeness(parsed_story)
+            if not validation.get("is_complete"):
+                return {
+                    "status": "incomplete",
+                    "stage": "validation",
+                    "parsed_story": parsed_story,
+                    "validation": validation,
+                    "recommendations": validation.get("recommendations", [])
+                }
+        
+        # Step 3: Extract technical requirements
+        requirements = extract_technical_requirements(client, parsed_story["components"])
+        if "error" in requirements:
+            return {
+                "status": "error",
+                "stage": "requirements",
+                "error": requirements["error"],
+                "parsed_story": parsed_story
+            }
+        
+        # Step 4: Generate implementation tasks
+        tasks = generate_implementation_tasks(client, requirements, parsed_story)
+        
+        # Step 5: Create executable plan
+        executable_plan = create_executable_plan(client, tasks, parsed_story)
+        
+        processing_time = time.time() - start_time
+        logger.info(f"Story-to-implementation pipeline completed in {processing_time:.3f}s")
+        
+        return {
+            "status": "success",
+            "parsed_story": parsed_story,
+            "validation": validate_story_completeness(parsed_story) if validate_first else None,
+            "requirements": requirements,
+            "tasks": tasks,
+            "executable_plan": executable_plan,
+            "_meta": {
+                "processing_time_ms": round(processing_time * 1000, 2),
+                "total_estimated_hours": executable_plan.get("total_estimated_hours", 0),
+                "phases_count": len(executable_plan.get("phases", {})),
+                "tasks_count": len(tasks)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in story-to-implementation pipeline: {e}")
+        return {
+            "status": "error",
+            "stage": "pipeline",
+            "error": str(e),
+            "original_story": story
+        }
