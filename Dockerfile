@@ -49,6 +49,6 @@ CMD ["python", "mcp_adapter.py"]
 LABEL maintainer="ServiceNow MCP Contributors" \
       version="0.8.0" \
       description="ServiceNow Model Context Protocol Server" \
-      org.opencontainers.image.source="https://github.com/yourusername/servicenow-mcp" \
-      org.opencontainers.image.documentation="https://github.com/yourusername/servicenow-mcp/blob/main/README.md" \
+      org.opencontainers.image.source="https://github.com/mady22070/servicenow-mcp" \
+      org.opencontainers.image.documentation="https://github.com/mady22070/servicenow-mcp/blob/main/README.md" \
       org.opencontainers.image.licenses="MIT"

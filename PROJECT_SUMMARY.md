@@ -29,7 +29,7 @@ ServiceNow MCP is a comprehensive Model Context Protocol (MCP) server that bridg
 ### Quick Setup
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/servicenow-mcp.git
+git clone https://github.com/mady22070/servicenow-mcp.git
 cd servicenow-mcp
 
 # Setup environment
@@ -197,7 +197,7 @@ python mcp_adapter.py
 **Ready to transform your ServiceNow automation with AI? Get started today!**
 
 ```bash
-git clone https://github.com/yourusername/servicenow-mcp.git
+git clone https://github.com/mady22070/servicenow-mcp.git
 cd servicenow-mcp
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt

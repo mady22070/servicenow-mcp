@@ -5,7 +5,7 @@ Thank you for your interest in contributing to ServiceNow MCP! This document pro
 ## 🤝 How to Contribute
 
 ### Reporting Issues
-- Use the [GitHub Issues](https://github.com/yourusername/servicenow-mcp/issues) page
+- Use the [GitHub Issues](https://github.com/mady22070/servicenow-mcp/issues) page
 - Search existing issues before creating a new one
 - Provide detailed information including:
   - ServiceNow version and instance type
@@ -15,7 +15,7 @@ Thank you for your interest in contributing to ServiceNow MCP! This document pro
   - Relevant logs or error messages
 
 ### Suggesting Features
-- Open a [GitHub Discussion](https://github.com/yourusername/servicenow-mcp/discussions) for feature requests
+- Open a [GitHub Discussion](https://github.com/mady22070/servicenow-mcp/discussions) for feature requests
 - Describe the use case and expected behavior
 - Consider if the feature fits the project's scope and goals
 
@@ -24,7 +24,7 @@ Thank you for your interest in contributing to ServiceNow MCP! This document pro
 #### Development Setup
 ```bash
 # Fork and clone the repository
-git clone https://github.com/yourusername/servicenow-mcp.git
+git clone https://github.com/mady22070/servicenow-mcp.git
 cd servicenow-mcp
 
 # Create virtual environment

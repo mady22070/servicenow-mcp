@@ -181,7 +181,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: yourusername/servicenow-mcp
+        images: mady22070/servicenow-mcp
         tags: |
           type=ref,event=branch
           type=ref,event=pr

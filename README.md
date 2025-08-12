@@ -40,7 +40,7 @@ A comprehensive Model Context Protocol (MCP) server that provides AI assistants 
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/servicenow-mcp.git
+git clone https://github.com/mady22070/servicenow-mcp.git
 cd servicenow-mcp
 ```
 
@@ -214,7 +214,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ### Development Setup
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/servicenow-mcp.git
+git clone https://github.com/mady22070/servicenow-mcp.git
 cd servicenow-mcp
 python3 -m venv .venv
 source .venv/bin/activate
@@ -240,9 +240,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/servicenow-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/servicenow-mcp/discussions)
-- **Documentation**: [Wiki](https://github.com/yourusername/servicenow-mcp/wiki)
+- **Issues**: [GitHub Issues](https://github.com/mady22070/servicenow-mcp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/mady22070/servicenow-mcp/discussions)
+- **Documentation**: [Wiki](https://github.com/mady22070/servicenow-mcp/wiki)
 
 ## 🗺️ Roadmap
 
