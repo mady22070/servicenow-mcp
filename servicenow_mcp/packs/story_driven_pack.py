@@ -6,8 +6,13 @@ from typing import Dict, Any, List, Optional, NamedTuple
 from ..servicenow_client import ServiceNowClient
 import re
 import json
+import logging
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
 class StoryFormat(Enum):
@@ -79,6 +84,19 @@ REQUIREMENT_KEYWORDS = {
     }
 }
 
+
+def _validate_configuration() -> None:
+    """Validate that all required configuration is present."""
+    required_categories = list(RequirementCategory)
+    for category in required_categories:
+        if category not in REQUIREMENT_KEYWORDS:
+            raise ValueError(f"Missing configuration for {category}")
+    logger.debug("Configuration validation passed")
+
+
+# Validate configuration on module load
+_validate_configuration()
+
 def parse_user_story(story: str) -> Dict[str, Any]:
     """
     Parse user story using standard format: As a [user], I want [goal] so that [benefit]
@@ -89,35 +107,46 @@ def parse_user_story(story: str) -> Dict[str, Any]:
     Returns:
         Dictionary containing parsing results with success status and components
     """
+    logger.debug(f"Parsing user story: {story[:100]}...")
+    
     if not story or not story.strip():
+        logger.warning("Empty story provided for parsing")
         return _create_error_response("Empty story provided", story)
     
-    story_lower = story.lower().strip()
-    
-    # Try to match standard user story format
-    user_story_pattern = r"as\s+a\s+(.+?),?\s+i\s+want\s+(.+?)\s+so\s+that\s+(.+)"
-    match = re.search(user_story_pattern, story_lower)
-    
-    if match:
-        components = StoryComponents(
-            user=match.group(1).strip(),
-            goal=match.group(2).strip(),
-            benefit=match.group(3).strip()
-        )
+    try:
+        story_lower = story.lower().strip()
         
-        return {
-            "success": True,
-            "original": story,
-            "format": StoryFormat.USER_STORY.value,
-            "components": {
-                "user": components.user,
-                "goal": components.goal,
-                "benefit": components.benefit
+        # Try to match standard user story format
+        user_story_pattern = r"as\s+a\s+(.+?),?\s+i\s+want\s+(.+?)\s+so\s+that\s+(.+)"
+        match = re.search(user_story_pattern, story_lower)
+        
+        if match:
+            components = StoryComponents(
+                user=match.group(1).strip(),
+                goal=match.group(2).strip(),
+                benefit=match.group(3).strip()
+            )
+            
+            logger.info(f"Successfully parsed user story with user: {components.user}")
+            
+            return {
+                "success": True,
+                "original": story,
+                "format": StoryFormat.USER_STORY.value,
+                "components": {
+                    "user": components.user,
+                    "goal": components.goal,
+                    "benefit": components.benefit
+                }
             }
-        }
-    
-    # Provide specific error messages for partial matches
-    return _analyze_partial_story_match(story_lower, story)
+        
+        # Provide specific error messages for partial matches
+        logger.warning(f"Failed to parse user story format: {story[:50]}...")
+        return _analyze_partial_story_match(story_lower, story)
+        
+    except Exception as e:
+        logger.error(f"Error parsing user story: {e}")
+        return _create_error_response(f"Error parsing story: {str(e)}", story)
 
 
 def _create_error_response(error_message: str, original_story: str) -> Dict[str, Any]:
@@ -166,25 +195,46 @@ def extract_technical_requirements(client: ServiceNowClient, story_components: D
         
     Returns:
         Dictionary of categorized technical requirements
+        
+    Raises:
+        ValueError: If story_components is invalid
     """
     if not story_components:
+        logger.error("No story components provided for requirement extraction")
         return {"error": "No story components provided"}
     
-    # Combine all story text for analysis
-    full_text = _combine_story_text(story_components)
+    if not isinstance(story_components, dict):
+        logger.error(f"Invalid story_components type: {type(story_components)}")
+        return {"error": "Invalid story components format"}
     
-    # Initialize requirements structure
-    requirements = {category.value: [] for category in RequirementCategory}
-    
-    # Extract requirements by category
-    for category in RequirementCategory:
-        category_requirements = _extract_category_requirements(category, full_text)
-        requirements[category.value].extend(category_requirements)
-    
-    return {
-        "technical_requirements": requirements,
-        "functional_requirements": _extract_functional_requirements(story_components)
-    }
+    try:
+        logger.debug("Extracting technical requirements from story components")
+        
+        # Combine all story text for analysis
+        full_text = _combine_story_text(story_components)
+        
+        if not full_text.strip():
+            logger.warning("Empty text extracted from story components")
+            return {"error": "No text content found in story components"}
+        
+        # Initialize requirements structure
+        requirements = {category.value: [] for category in RequirementCategory}
+        
+        # Extract requirements by category
+        for category in RequirementCategory:
+            category_requirements = _extract_category_requirements(category, full_text)
+            requirements[category.value].extend(category_requirements)
+        
+        logger.info(f"Extracted requirements for {len([r for r in requirements.values() if r])} categories")
+        
+        return {
+            "technical_requirements": requirements,
+            "functional_requirements": _extract_functional_requirements(story_components)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error extracting technical requirements: {e}")
+        return {"error": f"Failed to extract requirements: {str(e)}"}
 
 
 def _combine_story_text(story_components: Dict[str, Any]) -> str:
@@ -195,6 +245,7 @@ def _combine_story_text(story_components: Dict[str, Any]) -> str:
     return f"{goal} {user} {benefit}".lower()
 
 
+@lru_cache(maxsize=128)
 def _extract_category_requirements(category: RequirementCategory, full_text: str) -> List[str]:
     """Extract requirements for a specific category."""
     requirements = []
@@ -257,111 +308,172 @@ def _extract_functional_requirements(story_components: Dict[str, Any]) -> List[s
 def generate_implementation_tasks(client: ServiceNowClient, requirements: Dict[str, Any], 
                                 story_context: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Generate specific implementation tasks from requirements
+    Generate specific implementation tasks from requirements.
+    
+    Args:
+        client: ServiceNow client instance
+        requirements: Categorized technical requirements
+        story_context: Story context for task generation
+        
+    Returns:
+        List of implementation tasks organized by phase
     """
-    tasks = []
+    task_generator = TaskGenerator(requirements, story_context)
+    return task_generator.generate_all_tasks()
+
+
+class TaskGenerator:
+    """Generates implementation tasks based on requirements."""
     
-    # Data model tasks
-    if requirements.get("data_model"):
-        tasks.append({
-            "phase": "analysis",
-            "type": "investigation",
-            "title": "Analyze existing data model",
-            "description": "Review current table structure and identify required changes",
-            "pack": "query",
-            "function": "query_table",
-            "estimated_hours": 2,
-            "dependencies": []
-        })
+    def __init__(self, requirements: Dict[str, Any], story_context: Dict[str, Any]):
+        self.requirements = requirements
+        self.story_context = story_context
+        self.tasks = []
+    
+    def generate_all_tasks(self) -> List[Dict[str, Any]]:
+        """Generate all implementation tasks."""
+        self._add_data_model_tasks()
+        self._add_business_logic_tasks()
+        self._add_ui_tasks()
+        self._add_integration_tasks()
+        self._add_testing_tasks()
+        self._add_deployment_tasks()
+        return self.tasks
+    
+    def _add_data_model_tasks(self) -> None:
+        """Add data model related tasks."""
+        if not self.requirements.get("data_model"):
+            return
+            
+        self.tasks.extend([
+            self._create_task(
+                phase="analysis",
+                task_type="investigation",
+                title="Analyze existing data model",
+                description="Review current table structure and identify required changes",
+                pack="query",
+                function="query_table",
+                estimated_hours=2,
+                dependencies=[]
+            ),
+            self._create_task(
+                phase="development",
+                task_type="implementation",
+                title="Implement data model changes",
+                description="Create or modify tables, fields, and relationships",
+                pack="build",
+                function="create_table",
+                estimated_hours=4,
+                dependencies=["analyze_data_model"]
+            )
+        ])
+    
+    def _add_business_logic_tasks(self) -> None:
+        """Add business logic related tasks."""
+        business_logic = self.requirements.get("business_logic", [])
+        if not business_logic:
+            return
         
-        tasks.append({
-            "phase": "development", 
-            "type": "implementation",
-            "title": "Implement data model changes",
-            "description": "Create or modify tables, fields, and relationships",
-            "pack": "build",
-            "function": "create_table",
-            "estimated_hours": 4,
-            "dependencies": ["analyze_data_model"]
-        })
-    
-    # Business logic tasks
-    if requirements.get("business_logic"):
-        if any("workflow" in req.lower() for req in requirements["business_logic"]):
-            tasks.append({
-                "phase": "development",
-                "type": "implementation", 
-                "title": "Implement workflow logic",
-                "description": "Create flow designer workflows or business processes",
-                "pack": "flow",
-                "function": "flow_create",
-                "estimated_hours": 6,
-                "dependencies": ["data_model_changes"]
-            })
+        if self._has_workflow_requirements(business_logic):
+            self.tasks.append(self._create_task(
+                phase="development",
+                task_type="implementation",
+                title="Implement workflow logic",
+                description="Create flow designer workflows or business processes",
+                pack="flow",
+                function="flow_create",
+                estimated_hours=6,
+                dependencies=["data_model_changes"]
+            ))
         
-        if any("business rule" in req.lower() for req in requirements["business_logic"]):
-            tasks.append({
-                "phase": "development",
-                "type": "implementation",
-                "title": "Create business rules",
-                "description": "Implement server-side business logic",
-                "pack": "scripts",
-                "function": "create_business_rule", 
-                "estimated_hours": 3,
-                "dependencies": ["data_model_changes"]
-            })
+        if self._has_business_rule_requirements(business_logic):
+            self.tasks.append(self._create_task(
+                phase="development",
+                task_type="implementation",
+                title="Create business rules",
+                description="Implement server-side business logic",
+                pack="scripts",
+                function="create_business_rule",
+                estimated_hours=3,
+                dependencies=["data_model_changes"]
+            ))
     
-    # UI tasks
-    if requirements.get("user_interface"):
-        tasks.append({
-            "phase": "development",
-            "type": "implementation",
-            "title": "Develop user interface",
-            "description": "Create or modify forms, lists, and UI components",
-            "pack": "ux",
-            "function": "ux_create_page",
-            "estimated_hours": 4,
-            "dependencies": ["business_logic"]
-        })
+    def _add_ui_tasks(self) -> None:
+        """Add user interface related tasks."""
+        if self.requirements.get("user_interface"):
+            self.tasks.append(self._create_task(
+                phase="development",
+                task_type="implementation",
+                title="Develop user interface",
+                description="Create or modify forms, lists, and UI components",
+                pack="ux",
+                function="ux_create_page",
+                estimated_hours=4,
+                dependencies=["business_logic"]
+            ))
     
-    # Integration tasks
-    if requirements.get("integrations"):
-        tasks.append({
-            "phase": "development", 
-            "type": "implementation",
-            "title": "Implement integrations",
-            "description": "Create REST APIs or external system connections",
-            "pack": "integrations",
-            "function": "create_rest_message",
-            "estimated_hours": 5,
-            "dependencies": ["business_logic"]
-        })
+    def _add_integration_tasks(self) -> None:
+        """Add integration related tasks."""
+        if self.requirements.get("integrations"):
+            self.tasks.append(self._create_task(
+                phase="development",
+                task_type="implementation",
+                title="Implement integrations",
+                description="Create REST APIs or external system connections",
+                pack="integrations",
+                function="create_rest_message",
+                estimated_hours=5,
+                dependencies=["business_logic"]
+            ))
     
-    # Testing tasks
-    tasks.append({
-        "phase": "testing",
-        "type": "validation",
-        "title": "Create automated tests",
-        "description": "Develop ATF test cases for the implementation",
-        "pack": "atf", 
-        "function": "atf_create_suite",
-        "estimated_hours": 3,
-        "dependencies": ["ui_development", "business_logic"]
-    })
+    def _add_testing_tasks(self) -> None:
+        """Add testing related tasks."""
+        self.tasks.append(self._create_task(
+            phase="testing",
+            task_type="validation",
+            title="Create automated tests",
+            description="Develop ATF test cases for the implementation",
+            pack="atf",
+            function="atf_create_suite",
+            estimated_hours=3,
+            dependencies=["ui_development", "business_logic"]
+        ))
     
-    # Deployment tasks
-    tasks.append({
-        "phase": "deployment",
-        "type": "deployment",
-        "title": "Deploy to target environment", 
-        "description": "Create update set and deploy changes",
-        "pack": "update_set",
-        "function": "create_update_set",
-        "estimated_hours": 1,
-        "dependencies": ["testing_complete"]
-    })
+    def _add_deployment_tasks(self) -> None:
+        """Add deployment related tasks."""
+        self.tasks.append(self._create_task(
+            phase="deployment",
+            task_type="deployment",
+            title="Deploy to target environment",
+            description="Create update set and deploy changes",
+            pack="update_set",
+            function="create_update_set",
+            estimated_hours=1,
+            dependencies=["testing_complete"]
+        ))
     
-    return tasks
+    def _create_task(self, phase: str, task_type: str, title: str, description: str,
+                    pack: str, function: str, estimated_hours: int, 
+                    dependencies: List[str]) -> Dict[str, Any]:
+        """Create a standardized task dictionary."""
+        return {
+            "phase": phase,
+            "type": task_type,
+            "title": title,
+            "description": description,
+            "pack": pack,
+            "function": function,
+            "estimated_hours": estimated_hours,
+            "dependencies": dependencies
+        }
+    
+    def _has_workflow_requirements(self, business_logic: List[str]) -> bool:
+        """Check if workflow requirements exist."""
+        return any("workflow" in req.lower() for req in business_logic)
+    
+    def _has_business_rule_requirements(self, business_logic: List[str]) -> bool:
+        """Check if business rule requirements exist."""
+        return any("business rule" in req.lower() for req in business_logic)
 
 def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]], 
                          story_context: Dict[str, Any]) -> Dict[str, Any]:
@@ -482,41 +594,112 @@ def extract_table_name_from_goal(goal: str) -> str:
 
 def validate_story_completeness(story_analysis: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Validate that a user story has sufficient detail for implementation
+    Validate that a user story has sufficient detail for implementation.
+    
+    Args:
+        story_analysis: Parsed story analysis containing components
+        
+    Returns:
+        ValidationResult as dictionary with completeness assessment
     """
-    validation = {
-        "is_complete": True,
-        "missing_elements": [],
-        "recommendations": [],
-        "score": 0.0
+    import time
+    start_time = time.time()
+    
+    try:
+        components = story_analysis.get("components", {})
+        
+        validation_checks = [
+            _validate_user_persona(components),
+            _validate_goal_definition(components),
+            _validate_business_value(components),
+            _validate_action_clarity(components)
+        ]
+        
+        # Collect results
+        missing_elements = []
+        recommendations = []
+        
+        for check in validation_checks:
+            if not check["passed"]:
+                missing_elements.append(check["element"])
+                recommendations.append(check["recommendation"])
+        
+        # Calculate confidence score
+        passed_checks = len([check for check in validation_checks if check["passed"]])
+        confidence_score = passed_checks / len(validation_checks)
+        
+        validation_result = ValidationResult(
+            is_complete=confidence_score >= CONFIDENCE_THRESHOLD,
+            missing_elements=missing_elements,
+            recommendations=recommendations,
+            confidence_score=confidence_score
+        )
+        
+        processing_time = time.time() - start_time
+        logger.info(f"Story validation completed in {processing_time:.3f}s, score: {confidence_score:.2f}")
+        
+        return {
+            "is_complete": validation_result.is_complete,
+            "missing_elements": validation_result.missing_elements,
+            "recommendations": validation_result.recommendations,
+            "score": validation_result.confidence_score,  # Keep 'score' for backward compatibility
+            "_meta": {
+                "processing_time_ms": round(processing_time * 1000, 2),
+                "validation_checks_count": len(validation_checks),
+                "passed_checks_count": passed_checks
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error during story validation: {e}")
+        return {
+            "is_complete": False,
+            "missing_elements": ["validation_error"],
+            "recommendations": ["Fix validation error and try again"],
+            "score": 0.0,
+            "error": str(e)
+        }
+
+
+def _validate_user_persona(components: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate user persona component."""
+    user = components.get("user", "").strip()
+    return {
+        "passed": bool(user and len(user) > 2),
+        "element": "user_persona",
+        "recommendation": "Specify who will use this feature (e.g., 'service desk agent', 'manager')"
     }
-    
-    components = story_analysis.get("components", {})
-    
-    # Check for essential components
-    if not components.get("user") or len(components.get("user", "").strip()) < 3:
-        validation["missing_elements"].append("user_persona")
-        validation["recommendations"].append("Specify who will use this feature")
-    
-    if not components.get("goal") or len(components.get("goal", "").strip()) < 5:
-        validation["missing_elements"].append("goal_definition")
-        validation["recommendations"].append("Clearly define what the user wants to accomplish")
-    
-    if not components.get("benefit") or len(components.get("benefit", "").strip()) < 5:
-        validation["missing_elements"].append("business_value")
-        validation["recommendations"].append("Explain the business value or benefit")
-    
-    # Check for technical clarity
+
+
+def _validate_goal_definition(components: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate goal definition component."""
+    goal = components.get("goal", "").strip()
+    return {
+        "passed": bool(goal and len(goal) > 5),
+        "element": "goal_definition", 
+        "recommendation": "Clearly define what the user wants to accomplish"
+    }
+
+
+def _validate_business_value(components: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate business value component."""
+    benefit = components.get("benefit", "").strip()
+    return {
+        "passed": bool(benefit and len(benefit) > 5),
+        "element": "business_value",
+        "recommendation": "Explain the business value or benefit this feature provides"
+    }
+
+
+def _validate_action_clarity(components: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate that the goal contains clear action verbs."""
     goal = components.get("goal", "").lower()
-    if not any(word in goal for word in ["create", "update", "delete", "view", "manage", "process", "assign", "route", "automatically"]):
-        validation["missing_elements"].append("action_clarity")
-        validation["recommendations"].append("Use clear action verbs (create, update, view, etc.)")
+    action_verbs = ["create", "update", "delete", "view", "manage", "process", "assign", "route", "notify", "automatically"]
     
-    # Calculate confidence score
-    total_checks = 4
-    passed_checks = total_checks - len(validation["missing_elements"])
-    validation["score"] = passed_checks / total_checks
+    has_clear_action = any(verb in goal for verb in action_verbs)
     
-    validation["is_complete"] = validation["score"] >= 0.75
-    
-    return validation
+    return {
+        "passed": has_clear_action,
+        "element": "action_clarity",
+        "recommendation": f"Use clear action verbs in the goal: {', '.join(action_verbs[:5])}, etc."
+    }
