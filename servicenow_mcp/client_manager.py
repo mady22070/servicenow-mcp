@@ -2,7 +2,7 @@
 ServiceNow Client Manager - Handles client lifecycle and connection pooling
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any
 from .config import Config
 from .servicenow_client import ServiceNowClient
 
