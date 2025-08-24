@@ -41,6 +41,7 @@ class ValidationResult:
 
 class RequirementCategory(Enum):
     """Categories of technical requirements."""
+    APPLICATION_STRUCTURE = "application_structure"
     DATA_MODEL = "data_model"
     BUSINESS_LOGIC = "business_logic"
     USER_INTERFACE = "user_interface"
@@ -60,6 +61,9 @@ DEFAULT_ESTIMATED_HOURS = {
 
 # Keyword mappings for requirement extraction
 REQUIREMENT_KEYWORDS = {
+    RequirementCategory.APPLICATION_STRUCTURE: {
+        "scaffold": ["application", "module", "standalone", "custom app", "scoped app"]
+    },
     RequirementCategory.DATA_MODEL: {
         "create_store": ["create", "store", "save", "record", "data"],
         "form_fields": ["form", "field", "input", "capture"]
@@ -263,6 +267,9 @@ def _extract_category_requirements(category: RequirementCategory, full_text: str
 def _get_requirement_text(category: RequirementCategory, requirement_type: str) -> str:
     """Get descriptive text for a requirement type."""
     requirement_descriptions = {
+        RequirementCategory.APPLICATION_STRUCTURE: {
+            "scaffold": "New scoped application structure may be required"
+        },
         RequirementCategory.DATA_MODEL: {
             "create_store": "New table or fields may be required",
             "form_fields": "Form modifications needed"
@@ -286,7 +293,7 @@ def _get_requirement_text(category: RequirementCategory, requirement_type: str) 
             "optimization": "Performance optimization needed"
         }
     }
-    
+
     return requirement_descriptions.get(category, {}).get(requirement_type, "")
 
 
@@ -318,7 +325,7 @@ def generate_implementation_tasks(client: ServiceNowClient, requirements: Dict[s
     Returns:
         List of implementation tasks organized by phase
     """
-    task_generator = TaskGenerator(requirements, story_context)
+    task_generator = TaskGenerator(requirements.get("technical_requirements", {}), story_context)
     return task_generator.generate_all_tasks()
 
 
@@ -332,6 +339,7 @@ class TaskGenerator:
     
     def generate_all_tasks(self) -> List[Dict[str, Any]]:
         """Generate all implementation tasks."""
+        self._add_app_structure_tasks()
         self._add_data_model_tasks()
         self._add_business_logic_tasks()
         self._add_ui_tasks()
@@ -339,6 +347,22 @@ class TaskGenerator:
         self._add_testing_tasks()
         self._add_deployment_tasks()
         return self.tasks
+
+    def _add_app_structure_tasks(self) -> None:
+        """Add application structure related tasks."""
+        if not self.requirements.get("application_structure"):
+            return
+
+        self.tasks.append(self._create_task(
+            phase="development",
+            task_type="implementation",
+            title="Scaffold new application",
+            description="Create the basic structure for a new scoped application",
+            pack="build",
+            function="app_scaffold",
+            estimated_hours=1,
+            dependencies=[]  # This should be one of the first steps
+        ))
     
     def _add_data_model_tasks(self) -> None:
         """Add data model related tasks."""
@@ -541,6 +565,12 @@ def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]]
 
     return plan
 
+def generate_scope_name(app_name: str, prefix: str = "x_mcp") -> str:
+    """Generates a ServiceNow-compliant scope name from an application name."""
+    sanitized_name = re.sub(r'[^a-zA-Z0-9_]+', '', app_name.lower().replace(" ", "_"))
+    return f"{prefix}_{sanitized_name[:30]}"
+
+
 def generate_step_args(task: Dict[str, Any], story_context: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generate specific arguments for ServiceNow operations based on task context
@@ -550,7 +580,18 @@ def generate_step_args(task: Dict[str, Any], story_context: Dict[str, Any], cont
     pack = task.get("pack")
     function = task.get("function")
 
-    if pack == "build" and function == "create_table":
+    if pack == "build" and function == "app_scaffold":
+        goal = story_context.get("components", {}).get("goal", "")
+        app_name_base = extract_table_name_from_goal(goal)
+        app_name = f"{app_name_base.title()} Application"
+        scope_name = generate_scope_name(app_name_base)
+        args.update({
+            "app_name": app_name,
+            "scope_name": scope_name,
+            "description": f"A new application for: {goal}"
+        })
+
+    elif pack == "build" and function == "create_table":
         # Use table name from context
         table_name = context.get("table_name", "custom_table")
         args.update({

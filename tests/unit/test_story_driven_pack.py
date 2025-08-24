@@ -223,3 +223,32 @@ class TestStoryDrivenPack:
         expected_table_name = "u_widget"
         assert create_table_step["args"]["table_name"] == expected_table_name
         assert create_br_step["args"]["table_name"] == expected_table_name
+
+    def test_story_to_implementation_generates_app_scaffold_task(self, mock_servicenow_client):
+        """Test that a story about a new application generates an app_scaffold task"""
+        story = "As a user, I want to create a new standalone application for tracking inventory so that I can manage stock levels."
+
+        # We need to mock the full pipeline for this test
+        with patch.object(story_driven_pack, 'extract_technical_requirements', return_value={
+            'technical_requirements': {
+                'application_structure': ['New scoped application structure may be required']
+            },
+            'functional_requirements': []
+        }) as mock_extract:
+            result = story_driven_pack.story_to_implementation(mock_servicenow_client, story)
+
+            assert result['status'] == 'success'
+
+            # Check that an app_scaffold task was generated
+            execution_steps = result.get("executable_plan", {}).get("execution_steps", [])
+            app_scaffold_step = next((s for s in execution_steps if s.get("func") == "app_scaffold"), None)
+
+            assert app_scaffold_step is not None, "app_scaffold task should be in the plan"
+            assert app_scaffold_step["pack"] == "build"
+
+            # Check that the args are generated correctly
+            args = app_scaffold_step["args"]
+            assert "app_name" in args
+            assert "scope_name" in args
+            assert args["app_name"] == "Inventory Application"
+            assert args["scope_name"] == "x_mcp_inventory"
