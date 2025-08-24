@@ -475,19 +475,19 @@ class TaskGenerator:
         """Check if business rule requirements exist."""
         return any("business rule" in req.lower() for req in business_logic)
 
-def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]], 
+def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]],
                          story_context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Create an executable plan with specific ServiceNow operations.
-    
+
     Args:
         client: ServiceNow client instance
         tasks: List of implementation tasks
         story_context: Original story context and metadata
-        
+
     Returns:
         Dictionary containing executable plan with phases, steps, and criteria
-        
+
     Raises:
         ValueError: If tasks or story_context is invalid
     """
@@ -499,17 +499,22 @@ def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]]
         "prerequisites": [],
         "success_criteria": []
     }
-    
+
+    # Determine table name context once for the entire plan
+    goal = story_context.get("components", {}).get("goal", "")
+    table_name = extract_table_name_from_goal(goal)
+    plan_context = {"table_name": table_name}
+
     # Group tasks by phase
     for task in tasks:
         phase = task.get("phase", "unknown")
         if phase not in plan["phases"]:
             plan["phases"][phase] = []
         plan["phases"][phase].append(task)
-    
+
     # Create execution steps with actual ServiceNow operations
     step_counter = 1
-    
+
     for phase_name in ["analysis", "development", "testing", "deployment"]:
         if phase_name in plan["phases"]:
             for task in plan["phases"][phase_name]:
@@ -518,90 +523,122 @@ def create_executable_plan(client: ServiceNowClient, tasks: List[Dict[str, Any]]
                     "phase": phase_name,
                     "pack": task.get("pack"),
                     "func": task.get("function"),
-                    "args": generate_step_args(task, story_context),
+                    "args": generate_step_args(task, story_context, plan_context),
                     "description": task.get("description"),
                     "estimated_hours": task.get("estimated_hours", 1)
                 }
                 plan["execution_steps"].append(execution_step)
                 step_counter += 1
-    
+
     # Define success criteria
     plan["success_criteria"] = [
         "All automated tests pass",
-        "User acceptance criteria met", 
+        "User acceptance criteria met",
         "No critical security vulnerabilities",
         "Performance requirements satisfied",
         "Documentation updated"
     ]
-    
+
     return plan
 
-def generate_step_args(task: Dict[str, Any], story_context: Dict[str, Any]) -> Dict[str, Any]:
+def generate_step_args(task: Dict[str, Any], story_context: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generate specific arguments for ServiceNow operations based on task context
     """
     args = {"dry_run": True}  # Default to dry run for safety
-    
+
     pack = task.get("pack")
     function = task.get("function")
-    
+
     if pack == "build" and function == "create_table":
-        # Extract table name from story context
-        goal = story_context.get("components", {}).get("goal", "")
-        table_name = extract_table_name_from_goal(goal)
+        # Use table name from context
+        table_name = context.get("table_name", "custom_table")
         args.update({
             "table_label": f"{table_name.title()} Management",
             "table_name": f"u_{table_name}",
             "scope": "x_cloudorch_aiops"
         })
-    
+
     elif pack == "flow" and function == "flow_create":
         goal = story_context.get("components", {}).get("goal", "")
         args.update({
             "name": f"Process {goal[:50]}",
             "description": f"Automated workflow for: {goal}"
         })
-    
+
     elif pack == "scripts" and function == "create_business_rule":
+        # Use table name from context, which is now consistent
+        table_name = context.get("table_name", "custom_table")
         args.update({
-            "table_name": "u_custom_table",  # This would be determined from context
-            "name": "Custom Business Logic",
+            "table_name": f"u_{table_name}",
+            "name": f"Business Rule for {table_name.title()}",
             "when": "before",
             "actions": {"insert": True, "update": True}
         })
-    
+
     elif pack == "atf" and function == "atf_create_suite":
         args.update({
             "name": "Story Implementation Test Suite",
             "description": "Automated tests for user story implementation"
         })
-    
+
     elif pack == "update_set" and function == "create_update_set":
         args.update({
             "name": f"Story Implementation - {story_context.get('original', '')[:50]}",
             "description": "Implementation of user story requirements"
         })
-    
+
     return args
 
 def extract_table_name_from_goal(goal: str) -> str:
     """
-    Extract a reasonable table name from the goal description
+    Extract a reasonable table name from the goal description using more robust logic.
     """
-    # Simple extraction - look for nouns that could be table names
+    # Expanded stop words and common verbs/adjectives to exclude
+    stop_words = [
+        "a", "an", "the", "to", "for", "in", "on", "of", "with", "as", "i",
+        "want", "need", "like", "to", "be", "able", "have", "a", "new", "all",
+        "create", "update", "delete", "manage", "store", "record", "view", "make",
+        "assign", "route", "notify", "send", "get", "set", "track", "log",
+        "from", "based", "so", "that", "can", "and", "or", "very", "table"
+    ]
+
     words = re.findall(r'\b\w+\b', goal.lower())
-    
-    # Common ServiceNow entities
-    entities = ["incident", "request", "change", "problem", "task", "user", "group", "asset", "configuration"]
-    
+
+    # Common ServiceNow entities (singular form)
+    entities = ["incident", "request", "change", "problem", "task", "user", "group", "asset", "configuration", "item", "record", "service", "catalog"]
+    contextual_entities = ["user", "group"] # Entities that are often contextual rather than primary
+
+    found_entities = []
+    # 1. Find all known entities (and handle simple plurals)
     for word in words:
         if word in entities:
-            return word
-    
-    # If no standard entity found, use first meaningful noun
-    meaningful_words = [w for w in words if len(w) > 3 and w not in ["want", "need", "able", "create", "manage"]]
-    
-    return meaningful_words[0] if meaningful_words else "custom_item"
+            found_entities.append(word)
+        elif len(word) > 1 and word.endswith('s') and word[:-1] in entities:
+            found_entities.append(word[:-1])
+
+    if found_entities:
+        # If we have multiple entities, and some are non-contextual, prefer those.
+        non_contextual_entities = [e for e in found_entities if e not in contextual_entities]
+        if non_contextual_entities:
+            # Return the last non-contextual entity
+            return non_contextual_entities[-1]
+        else:
+            # Otherwise, just return the last contextual entity found
+            return found_entities[-1]
+
+    # 2. Fallback: find the most likely noun (last non-stopword)
+    meaningful_words = [w for w in words if w not in stop_words and len(w) > 3]
+    if meaningful_words:
+        # Return the singular form of the last meaningful word, avoiding words like "process"
+        candidate = meaningful_words[-1]
+        if len(candidate) > 1 and candidate.endswith('s') and not candidate.endswith('ss'):
+            return candidate[:-1]
+        return candidate
+
+    # 3. Last resort: generate a name from the goal
+    sanitized_goal = re.sub(r'[^a-zA-Z0-9_]', '', goal.replace(" ", "_")).lower()
+    return f"custom_{sanitized_goal[:20]}" if sanitized_goal else "custom_table"
 
 def validate_story_completeness(story_analysis: Dict[str, Any]) -> Dict[str, Any]:
     """
