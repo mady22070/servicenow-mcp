@@ -219,6 +219,51 @@ TOOL_CONFIGURATIONS: Dict[str, Dict[str, Any]] = {
             }
         ]
     },
+
+    # Customer Service Management (CSM) Tools
+    "csm_pack": {
+        "tools": [
+            {
+                "func_name": "create_case",
+                "description": "Create a new customer service case",
+                "guard_tables": ["sn_customerservice_case"]
+            },
+            {
+                "func_name": "get_case",
+                "description": "Get a customer service case by its sys_id"
+            }
+        ]
+    },
+
+    # Field Service Management (FSM) Tools
+    "fsm_pack": {
+        "tools": [
+            {
+                "func_name": "create_work_order",
+                "description": "Create a new field service work order",
+                "guard_tables": ["wm_order"]
+            },
+            {
+                "func_name": "get_work_order",
+                "description": "Get a field service work order by its sys_id"
+            }
+        ]
+    },
+
+    # Security Operations (SecOps) Tools
+    "secops_pack": {
+        "tools": [
+            {
+                "func_name": "create_security_incident",
+                "description": "Create a new security incident",
+                "guard_tables": ["sn_si_incident"]
+            },
+            {
+                "func_name": "get_security_incident",
+                "description": "Get a security incident by its sys_id"
+            }
+        ]
+    },
     
     # Table Operations
     "table_pack": {
