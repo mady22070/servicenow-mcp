@@ -8,12 +8,21 @@ A comprehensive Model Context Protocol (MCP) server that provides AI assistants 
 
 ## 🚀 Features
 
+### Production-Ready Architecture
+- **Comprehensive Error Handling** - Structured error responses with proper error codes
+- **Input Validation** - Pydantic models for all tool parameters with validation
+- **Structured Logging** - JSON-formatted logs with context and performance metrics
+- **Async Operations** - High-performance async client with connection pooling
+- **MCP Resources** - Full resource exposure for ServiceNow data
+- **Health Monitoring** - Built-in health checks and performance monitoring
+- **Security** - Input sanitization, authentication handling, and access controls
+
 ### Core Capabilities
 - **Multi-environment support** (dev/test/prod)
 - **Comprehensive ServiceNow operations** through modular "packs"
 - **Built-in security guards** and workspace management
 - **Advanced caching and connection pooling**
-- **Comprehensive error handling and logging**
+- **Request retry logic** with exponential backoff
 
 ### Senior Developer Features
 - **Story-to-Implementation Pipeline**: Convert user stories into executable ServiceNow plans
@@ -48,6 +57,16 @@ cd servicenow-mcp
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Validate Installation
+```bash
+python3 test_mcp_improvements.py
 ```
 
 ### 3. Install Dependencies
