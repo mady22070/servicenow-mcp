@@ -33,6 +33,15 @@ SERVICENOW_PASSWORD=your-password
 OPENAI_API_KEY=your-openai-key
 ```
 
+## Choosing a transport
+
+The server supports two transports:
+
+| Transport | When to use |
+|---|---|
+| `stdio` (default) | Claude Desktop — the standard local setup |
+| `http` | Cursor, Cline, LangChain, OpenAI Agents SDK, any web client |
+
 ## Claude Desktop setup
 
 Add this to your `claude_desktop_config.json`:
@@ -51,6 +60,51 @@ Add this to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+## HTTP transport (Cursor, Cline, LangChain, OpenAI Agents SDK)
+
+Start the server in HTTP mode:
+
+```bash
+MCP_TRANSPORT=http python -m servicenow_mcp
+```
+
+The MCP endpoint is at `http://localhost:8000/mcp`.
+
+To require an API key on all requests:
+
+```bash
+MCP_TRANSPORT=http MCP_API_KEY=your-secret-key python -m servicenow_mcp
+```
+
+Clients must then include `Authorization: Bearer your-secret-key` in every request.
+
+### Cursor / Cline config
+
+```json
+{
+  "mcpServers": {
+    "servicenow": {
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer your-secret-key"
+      }
+    }
+  }
+}
+```
+
+### Docker + HTTP mode
+
+```bash
+docker run -p 8000:8000 \
+  -e MCP_TRANSPORT=http \
+  -e MCP_API_KEY=your-secret-key \
+  -e SERVICENOW_INSTANCE_URL=https://your-instance.service-now.com \
+  -e SERVICENOW_USERNAME=your-username \
+  -e SERVICENOW_PASSWORD=your-password \
+  servicenow-mcp
 ```
 
 ## What's included

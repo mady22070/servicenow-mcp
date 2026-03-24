@@ -187,7 +187,11 @@ def _validate_pack_imports():
 _validate_pack_imports()
 
 # Initialize MCP server with metadata
-mcp = FastMCP("servicenow-mcp")
+mcp = FastMCP(
+    "servicenow-mcp",
+    host=os.getenv("MCP_HOST", "0.0.0.0"),
+    port=int(os.getenv("MCP_PORT", "8000")),
+)
 
 # Server info
 SERVER_INFO = ServerInfo(
