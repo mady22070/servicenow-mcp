@@ -124,8 +124,69 @@ def setup_logging(
 
 
 def get_logger(name: str = "servicenow_mcp") -> logging.Logger:
-    """Get a logger instance"""
-    return logging.getLogger(name)
+    """Get a logger instance with enhanced debugging capabilities"""
+    logger = logging.getLogger(name)
+    
+    # Ensure logger is initialized if not already done
+    if not logger.handlers:
+        init_default_logger()
+    
+    return logger
+
+
+def log_api_request(logger: logging.Logger, method: str, url: str, params: dict = None, 
+                   fields: list = None, table: str = None):
+    """Log API request details for debugging"""
+    logger.debug("API Request", extra={
+        "operation": "api_request",
+        "method": method,
+        "url": url,
+        "params": params or {},
+        "fields": fields or [],
+        "table": table,
+        "request_type": "servicenow_api"
+    })
+
+
+def log_api_response(logger: logging.Logger, status_code: int, response_size: int, 
+                    record_count: int = None, duration_ms: float = None, 
+                    table: str = None, has_field_issues: bool = False):
+    """Log API response details for debugging"""
+    logger.debug("API Response", extra={
+        "operation": "api_response",
+        "status_code": status_code,
+        "response_size": response_size,
+        "record_count": record_count,
+        "duration_ms": duration_ms,
+        "table": table,
+        "has_field_issues": has_field_issues,
+        "response_type": "servicenow_api"
+    })
+
+
+def log_field_validation(logger: logging.Logger, table: str, requested_fields: list, 
+                        valid_fields: list, restricted_fields: list):
+    """Log field validation results for debugging"""
+    logger.info("Field Validation", extra={
+        "operation": "field_validation",
+        "table": table,
+        "requested_fields": requested_fields,
+        "valid_fields": valid_fields,
+        "restricted_fields": restricted_fields,
+        "validation_success": len(restricted_fields) == 0
+    })
+
+
+def log_bug_fix_applied(logger: logging.Logger, bug_type: str, table: str = None, 
+                       fix_details: dict = None):
+    """Log when a bug fix is applied"""
+    logger.info(f"Bug fix applied: {bug_type}", extra={
+        "operation": "bug_fix",
+        "bug_type": bug_type,
+        "table": table,
+        "fix_details": fix_details or {},
+        "fix_applied": True
+    })
 
 
 class LogContext:
@@ -191,13 +252,19 @@ def log_performance(operation: str):
 # Initialize default logger
 _default_logger = None
 
-def init_default_logger():
+def init_default_logger(enable_console: bool = None, log_file: str = None):
     """Initialize the default logger with environment-based configuration"""
     global _default_logger
     if _default_logger is None:
         log_level = os.getenv("MCP_LOG_LEVEL", "INFO")
-        log_file = os.getenv("MCP_LOG_FILE")
-        enable_console = os.getenv("MCP_LOG_CONSOLE", "true").lower() == "true"
+        
+        # Default to file logging for MCP compatibility
+        if log_file is None:
+            log_file = os.getenv("MCP_LOG_FILE", "/tmp/servicenow-mcp.log")
+        
+        # Default to no console output for MCP compatibility
+        if enable_console is None:
+            enable_console = os.getenv("MCP_LOG_CONSOLE", "false").lower() == "true"
         
         _default_logger = setup_logging(
             level=log_level,

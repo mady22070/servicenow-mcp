@@ -1,6 +1,6 @@
 
 from typing import Dict, Any, List, Callable
-from .audit import log
+from .audit_simple import log
 def execute_plan(step_fn_resolver: Callable[[str, str], Callable[..., Any]], plan: List[Dict[str, Any]],
                  confirm: bool = False, continue_on_error: bool = False) -> Dict[str, Any]:
     results = []; errors = []

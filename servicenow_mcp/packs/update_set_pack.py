@@ -1,7 +1,7 @@
 
 from typing import Dict, Any, Optional
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def create_update_set(client: ServiceNowClient, name: str, description: str = "", application: Optional[str] = None,
                       state: str = "in progress", table: str = "sys_update_set", dry_run: bool = False) -> Dict[str, Any]:
     payload = {"name": name, "state": state, "description": description}

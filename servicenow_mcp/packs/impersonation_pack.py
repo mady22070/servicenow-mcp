@@ -1,7 +1,7 @@
 
 from typing import Dict, Any
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 API_NAME = "mcp_acl_test"; API_BASE = "x_mcp/acltest"
 SCRIPT = r"""(function process(request, response) {
   var body = request.body.data || {};

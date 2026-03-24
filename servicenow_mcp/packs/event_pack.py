@@ -1,7 +1,7 @@
 
 from typing import Optional, Dict, Any, List
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def create_event_rule(client: ServiceNowClient, name: str, filter_query: str, severity: Optional[str] = None,
                       table: str = "em_event_rule", dry_run: bool = False) -> Dict[str, Any]:
     payload = {"name": name, "active": "true", "match_condition": filter_query}

@@ -137,7 +137,7 @@ class ServiceNowClient:
             raise ServiceNowError(f"Create record error: {str(e)}")
 
     def get_record(self, table: str, sys_id: str, fields: Optional[List[str]] = None) -> Dict[str, Any]:
-        """Get a record from ServiceNow table"""
+        """Get a record from ServiceNow table with enhanced error handling and logging"""
         if not table or not table.strip():
             raise ValueError(ValidationMessages.EMPTY_TABLE_NAME)
         if not sys_id or not sys_id.strip():
@@ -147,21 +147,48 @@ class ServiceNowClient:
         params = {}
         if fields: 
             params["sysparm_fields"] = ",".join(fields)
+            self.logger.debug(f"Requesting specific fields for record {sys_id}: {fields}")
+        
+        # Log the full request details for debugging
+        request_url = self._url(f"/api/now/table/{table}/{sys_id}")
+        self.logger.debug(f"Get record request - URL: {request_url}, Params: {params}")
         
         try:
             r = self.session.get(
-                self._url(f"/api/now/table/{table}/{sys_id}"), 
+                request_url, 
                 params=params, 
                 timeout=self.timeout
             )
             r._duration_ms = (time.time() - start_time) * 1000
             
+            # Log response details for debugging
+            self.logger.debug(f"Get record response - Status: {r.status_code}, Content-Length: {len(r.text) if r.text else 0}")
+            
             result = self._handle_response(r, f"GET {table}/{sys_id}")
-            return result.get("result", result)
+            
+            # Enhanced response validation and logging
+            if isinstance(result, dict):
+                if "result" in result:
+                    actual_result = result["result"]
+                    self.logger.debug(f"Get record returned: {type(actual_result)}")
+                    
+                    # Check for empty field issue
+                    if isinstance(actual_result, dict) and len(actual_result) == 0 and fields:
+                        self.logger.warning(f"Get record returned empty object - possible field access restriction for fields: {fields}")
+                    
+                    return actual_result
+                else:
+                    self.logger.debug("Get record response does not contain 'result' key, returning full response")
+                    return result
+            else:
+                self.logger.debug(f"Get record returned non-dict response: {type(result)}")
+                return result
             
         except requests.exceptions.Timeout:
+            self.logger.error(f"Get record timeout after {self.timeout}s for {table}/{sys_id}")
             raise TimeoutError(f"Get record timeout after {self.timeout}s", self.timeout)
         except requests.exceptions.RequestException as e:
+            self.logger.error(f"Get record request failed for {table}/{sys_id}: {str(e)}")
             raise ServiceNowError(f"Get record error: {str(e)}")
 
     def update_record(self, table: str, sys_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -218,7 +245,7 @@ class ServiceNowClient:
             raise ServiceNowError(f"Delete record error: {str(e)}")
 
     def query_table(self, table: str, query: str = "", fields: Optional[List[str]] = None, limit: int = 100, display: bool = False) -> Dict[str, Any]:
-        """Query records from ServiceNow table"""
+        """Query records from ServiceNow table with enhanced error handling and logging"""
         if not table or not table.strip():
             raise ValueError("Table name cannot be empty")
         if limit <= 0:
@@ -232,23 +259,51 @@ class ServiceNowClient:
             params["sysparm_query"] = query
         if fields: 
             params["sysparm_fields"] = ",".join(fields)
+            self.logger.debug(f"Requesting specific fields: {fields}")
         if display: 
             params["sysparm_display_value"] = "all"
         
+        # Log the full request details for debugging
+        request_url = self._url(f"/api/now/table/{table}")
+        self.logger.debug(f"Query request - URL: {request_url}, Params: {params}")
+        
         try:
             r = self.session.get(
-                self._url(f"/api/now/table/{table}"), 
+                request_url, 
                 params=params, 
                 timeout=self.timeout
             )
             r._duration_ms = (time.time() - start_time) * 1000
             
+            # Log response details for debugging
+            self.logger.debug(f"Query response - Status: {r.status_code}, Content-Length: {len(r.text) if r.text else 0}")
+            
             result = self._handle_response(r, f"QUERY {table}")
-            return result.get("result", result)
+            
+            # Enhanced response validation and logging
+            if isinstance(result, dict):
+                if "result" in result:
+                    actual_result = result["result"]
+                    self.logger.debug(f"Query returned {len(actual_result) if isinstance(actual_result, list) else 1} records")
+                    
+                    # Check for empty field issue
+                    if (isinstance(actual_result, list) and len(actual_result) > 0 and 
+                        isinstance(actual_result[0], dict) and len(actual_result[0]) == 0 and fields):
+                        self.logger.warning(f"Query returned records with no fields - possible field access restriction for fields: {fields}")
+                    
+                    return actual_result
+                else:
+                    self.logger.debug("Query response does not contain 'result' key, returning full response")
+                    return result
+            else:
+                self.logger.debug(f"Query returned non-dict response: {type(result)}")
+                return result
             
         except requests.exceptions.Timeout:
+            self.logger.error(f"Query timeout after {self.timeout}s for table {table}")
             raise TimeoutError(f"Query table timeout after {self.timeout}s", self.timeout)
         except requests.exceptions.RequestException as e:
+            self.logger.error(f"Query request failed for table {table}: {str(e)}")
             raise ServiceNowError(f"Query table error: {str(e)}")
 
     # Attachments

@@ -1,8 +1,24 @@
 
 from typing import Any, Dict, List, Optional
 from ..servicenow_client import ServiceNowClient
+from ..bug_fix_layer import BugFixLayer
+
 def query_table(client: ServiceNowClient, table: str, query: str = "", fields: Optional[List[str]] = None, limit: int = 100, display: bool = False) -> Dict[str, Any]:
-    return {"items": client.query_table(table, query, fields, limit, display)}
+    """Query table with bug fixes applied"""
+    bug_fix_layer = BugFixLayer(client)
+    result = bug_fix_layer.query_table_with_fixes(table, query, fields, limit, display)
+    
+    # Return in the expected format for MCP adapter
+    if result["success"]:
+        return result["data"]  # This contains {"result": [...], "record_count": N}
+    else:
+        # Return error information in a format the MCP adapter can handle
+        return {
+            "result": [],
+            "record_count": 0,
+            "errors": result["errors"],
+            "warnings": result["warnings"]
+        }
 def stats(client: ServiceNowClient, table: str, query: str = "", group_by: Optional[List[str]] = None, count: bool = True,
           sum: Optional[List[str]] = None, avg: Optional[List[str]] = None, minv: Optional[List[str]] = None, maxv: Optional[List[str]] = None) -> Dict[str, Any]:
     return client.stats(table, query, group_by, count, sum, avg, minv, maxv)

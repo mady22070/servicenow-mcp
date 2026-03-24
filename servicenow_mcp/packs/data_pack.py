@@ -1,7 +1,7 @@
 
 from typing import Optional, Dict, Any
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def create_data_source_jdbc(client: ServiceNowClient, name: str, connection_url: str, username: str, password: str,
                             target_table: Optional[str] = None, jdbc_driver: Optional[str] = None,
                             table: str = "sys_data_source", dry_run: bool = False) -> Dict[str, Any]:

@@ -1,7 +1,7 @@
 
 from typing import Dict, Any, Optional, List
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def create_script_include(client: ServiceNowClient, name: str, script: str, api_name: Optional[str] = None, active: bool = True,
                           table: str = "sys_script_include", scope: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
     payload = {"name": name, "active": "true" if active else "false", "script": script}

@@ -1,7 +1,7 @@
 
 from typing import Optional, Dict, Any
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def create_rest_message(client: ServiceNowClient, name: str, endpoint: str, authentication_type: str = "none",
                         table: str = "sys_rest_message", dry_run: bool = False) -> Dict[str, Any]:
     payload = {"name": name, "endpoint": endpoint, "authentication_type": authentication_type}

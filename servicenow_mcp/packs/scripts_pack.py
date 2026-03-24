@@ -2,7 +2,7 @@
 from typing import Optional, Dict, Any, List
 import re
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def lint_client_script(script: str, ui_type: str) -> Dict[str, Any]:
     issues = []
     if "g_form." in script and "function onSubmit" in script and "return" not in script:

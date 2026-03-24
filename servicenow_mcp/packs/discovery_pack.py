@@ -1,7 +1,7 @@
 
 from typing import List, Optional, Dict, Any
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def quick_discovery(client: ServiceNowClient, name: str, ips: List[str], mid_server: Optional[str] = None,
                     schedule_table: str = "discovery_schedule", dry_run: bool = False) -> Dict[str, Any]:
     payload = {"name": name,"active": "true","type": "Quick","ip_range": ",".join(ips),"discover_now_ip_list": ",".join(ips)}

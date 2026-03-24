@@ -1,7 +1,7 @@
 
 from typing import Dict, Any, Optional
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def asset_receive(client: ServiceNowClient, model: str, asset_tag: str, location: Optional[str] = None,
                   stockroom: Optional[str] = None, cost: Optional[float] = None, table: str = "alm_asset",
                   dry_run: bool = False) -> Dict[str, Any]:

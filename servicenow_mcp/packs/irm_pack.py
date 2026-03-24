@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 
 def create_policy(client: ServiceNowClient, name: str, owner_user: str, state: str = "draft",
                   table: str = "sn_grc_policy_statement", number_prefix: str = "POL",

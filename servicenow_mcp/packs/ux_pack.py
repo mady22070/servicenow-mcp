@@ -1,7 +1,7 @@
 
 from typing import Dict, Any
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 import json
 def _json(obj: Dict[str, Any]) -> str:
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)

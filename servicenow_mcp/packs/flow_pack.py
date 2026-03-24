@@ -1,7 +1,7 @@
 
 from typing import Dict, Any
 from ..servicenow_client import ServiceNowClient
-from ..utils.audit import log
+from ..utils.audit_simple import log
 def create_flow(client: ServiceNowClient, name: str, description: str = "", table: str = "sys_hub_flow", dry_run: bool = False) -> Dict[str, Any]:
     payload = {"name": name, "description": description, "active": "false"}
     if dry_run: return {"dry_run": True, "table": table, "record": payload}

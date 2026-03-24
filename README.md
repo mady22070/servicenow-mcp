@@ -1,289 +1,86 @@
-# ServiceNow MCP Server
+# servicenow-mcp
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
+An MCP (Model Context Protocol) server that lets Claude interact with a ServiceNow instance. Exposes ServiceNow functionality as tools Claude can call directly from Claude Desktop or any MCP-compatible client.
 
-A comprehensive Model Context Protocol (MCP) server that provides AI assistants with powerful ServiceNow integration capabilities. This server enables automated operations, advanced troubleshooting, and sophisticated development workflows within ServiceNow instances.
+## Requirements
 
-## 🚀 Features
+- Python 3.10+
+- A ServiceNow instance (developer instance works fine)
+- Claude Desktop or another MCP client
 
-### Production-Ready Architecture
-- **Comprehensive Error Handling** - Structured error responses with proper error codes
-- **Input Validation** - Pydantic models for all tool parameters with validation
-- **Structured Logging** - JSON-formatted logs with context and performance metrics
-- **Async Operations** - High-performance async client with connection pooling
-- **MCP Resources** - Full resource exposure for ServiceNow data
-- **Health Monitoring** - Built-in health checks and performance monitoring
-- **Security** - Input sanitization, authentication handling, and access controls
+## Installation
 
-### Core Capabilities
-- **Multi-environment support** (dev/test/prod)
-- **Comprehensive ServiceNow operations** through modular "packs"
-- **Built-in security guards** and workspace management
-- **Advanced caching and connection pooling**
-- **Request retry logic** with exponential backoff
-
-### Senior Developer Features
-- **Story-to-Implementation Pipeline**: Convert user stories into executable ServiceNow plans
-- **Advanced CMDB Troubleshooting**: Sophisticated duplicate detection and data quality analysis
-- **Root Cause Analysis**: Systematic problem investigation with correlation analysis
-- **Development Planning**: Automated task decomposition and dependency management
-
-### Supported ServiceNow Areas
-- **ITSM**: Incidents, Problems, Changes, Requests
-- **CMDB**: Configuration items, relationships, discovery
-- **Development**: Scripts, business rules, UI policies, flows
-- **Platform**: Tables, fields, users, groups, notifications
-- **Automation**: Workflows, scheduled jobs, integrations
-- **Quality**: ATF testing, data validation, performance monitoring
-
-## 📋 Prerequisites
-
-- Python 3.8 or higher
-- ServiceNow instance (any version)
-- ServiceNow user account with appropriate permissions
-- MCP-compatible AI assistant (Claude Desktop, etc.)
-
-## 🛠️ Installation
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/mady22070/servicenow-mcp.git
-cd servicenow-mcp
-```
-
-### 2. Set Up Virtual Environment
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Validate Installation
-```bash
-python3 test_mcp_improvements.py
-```
-
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment
-Create environment variables for your ServiceNow instance:
+For RAG-based knowledge search (optional):
 
 ```bash
-# Development environment
-export SERVICENOW_DEV_INSTANCE_URL=https://devXXX.service-now.com
-export SERVICENOW_DEV_USERNAME=your_username
-export SERVICENOW_DEV_PASSWORD=your_password
-
-# Optional: Production environment
-export SERVICENOW_PROD_INSTANCE_URL=https://yourinstance.service-now.com
-export SERVICENOW_PROD_USERNAME=prod_username
-export SERVICENOW_PROD_PASSWORD=prod_password
-
-# Optional: Restrict table access during testing
-export MCP_ALLOW_TABLES=sys_script,sys_script_include,ui_policy,ui_policy_action
+pip install chromadb sentence-transformers
 ```
 
-## 🚀 Quick Start
+## Configuration
 
-### For Claude Desktop Users (Most Common)
+Set the following environment variables (or copy `.env.example` to `.env`):
 
-**👉 [Follow the Complete Claude Desktop Setup Guide](docs/claude-setup-guide.md)**
-
-**Quick Summary:**
-1. Clone this repository and install dependencies
-2. Configure your ServiceNow credentials in `.env` file
-3. Add MCP server to Claude Desktop configuration
-4. Restart Claude Desktop and start using ServiceNow with AI!
-
-### For Developers
-
-### 1. Start the MCP Server
 ```bash
-python mcp_adapter.py
+SERVICENOW_INSTANCE_URL=https://your-instance.service-now.com
+SERVICENOW_USERNAME=your-username
+SERVICENOW_PASSWORD=your-password
+
+# Optional — enables semantic knowledge search
+OPENAI_API_KEY=your-openai-key
 ```
 
-### 2. Configure Your MCP Client
-Add to your MCP client configuration:
+## Claude Desktop setup
+
+Add this to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "servicenow": {
       "command": "python",
-      "args": ["/path/to/servicenow-mcp/mcp_adapter.py"],
+      "args": ["-m", "servicenow_mcp"],
       "env": {
-        "SERVICENOW_DEV_INSTANCE_URL": "https://devXXX.service-now.com",
-        "SERVICENOW_DEV_USERNAME": "your_username",
-        "SERVICENOW_DEV_PASSWORD": "your_password"
+        "SERVICENOW_INSTANCE_URL": "https://your-instance.service-now.com",
+        "SERVICENOW_USERNAME": "your-username",
+        "SERVICENOW_PASSWORD": "your-password"
       }
     }
   }
 }
 ```
 
-### 3. Test the Connection
-```bash
-# Run health check
-python doctor.py
-```
+## What's included
 
-## 📖 Usage Examples
+Tools are grouped into packs by domain:
 
-### Basic Operations
-```python
-# Create an incident
-create_incident(
-    short_description="Server outage in production",
-    description="Web servers are not responding",
-    additional_fields={"urgency": "1", "impact": "1"}
-)
+| Category | Packs |
+|---|---|
+| Core development | scripts, dev, background scripts, senior dev |
+| Data / config | tables, data import/export, update sets, attachments |
+| ITSM | incidents, changes, problems, requests, approvals |
+| CMDB / discovery | CMDB, CSDM, discovery, ITAM, ITOM, SAM/HAM |
+| Workflow | Flow Designer, pipelines, planner |
+| Integrations | Scripted REST APIs, integration hub |
+| UI | UI Builder, service catalog, UX |
+| App development | scoped apps, best practices, naming conventions |
+| Testing | ATF, troubleshooting |
+| Knowledge | docs search, knowledge base, RAG search |
+| Security | governance, impersonation, events |
 
-# Query records
-query_table(
-    table="incident",
-    query="state=1^urgency=1",
-    fields=["number", "short_description", "state"],
-    limit=10
-)
-```
-
-### Story-Driven Development
-```python
-# Convert user story to implementation plan
-story_to_implementation(
-    story="As a service desk agent, I want to automatically assign incidents based on category so that tickets are routed to the right team faster"
-)
-```
-
-### Advanced CMDB Analysis
-```python
-# Detect and analyze CMDB duplicates
-troubleshoot_cmdb_duplicates(
-    ci_class="cmdb_ci_server",
-    analysis_fields=["name", "ip_address", "serial_number"],
-    limit=100
-)
-```
-
-### Root Cause Analysis
-```python
-# Investigate system issues
-root_cause_analysis(
-    issue_description="Users reporting slow form loading times",
-    related_table="incident",
-    time_range_hours=24
-)
-```
-
-## 🏗️ Architecture
-
-The ServiceNow MCP server is built with a modular architecture:
-
-```
-servicenow_mcp/
-├── mcp_adapter.py          # Main MCP server entry point
-├── client_manager.py       # Connection pooling and lifecycle
-├── tool_registry.py        # Centralized tool registration
-├── config.py              # Environment configuration
-├── decorators.py           # Cross-cutting concerns
-├── packs/                 # Functional modules
-│   ├── query_pack.py      # Data querying and statistics
-│   ├── build_pack.py      # Application development
-│   ├── senior_dev_pack.py # Advanced development features
-│   ├── story_driven_pack.py # Story-to-implementation
-│   └── ...               # 20+ specialized packs
-├── utils/                 # Utility functions
-│   ├── guard.py          # Security controls
-│   ├── plan.py           # Multi-step execution
-│   └── workspace.py      # Workspace management
-└── tools/                # Tool definitions by area
-    └── ...
-```
-
-## 🔒 Security
-
-- **Table Guards**: Configurable access controls for sensitive tables
-- **Environment Isolation**: Separate configurations for dev/test/prod
-- **Dry Run Mode**: Test operations without making changes
-- **Audit Logging**: Comprehensive operation tracking
-- **Credential Management**: Secure environment variable handling
-
-## 🧪 Testing
+## Running tests
 
 ```bash
-# Run basic health checks
-python doctor.py
-
-# Test specific functionality
-python -c "from servicenow_mcp.client_manager import client_manager; print(client_manager.health_check())"
-
-# Validate configuration
-python -c "from servicenow_mcp.config import Config; print(Config.for_env('dev'))"
+pytest
 ```
 
-## 📚 Documentation
+## Contributing
 
-- **[Claude Desktop Setup Guide](docs/claude-setup-guide.md)** - Complete step-by-step setup for Claude Desktop
-- **[Quick Reference](docs/claude-quick-reference.md)** - Common commands and usage examples
-- [API Reference](docs/api-reference.md) - Complete tool documentation
-- [Configuration Guide](docs/configuration.md) - Setup and environment management
-- [Examples](examples/) - Real-world usage scenarios
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## 🤝 Contributing
+## License
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-```bash
-# Clone and setup
-git clone https://github.com/mady22070/servicenow-mcp.git
-cd servicenow-mcp
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
-
-# Run tests
-python -m pytest tests/
-
-# Format code
-black servicenow_mcp/
-isort servicenow_mcp/
-```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the foundational framework
-- [ServiceNow](https://www.servicenow.com/) for the platform APIs
-- [FastMCP](https://github.com/jlowin/fastmcp) for the MCP server implementation
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/mady22070/servicenow-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/mady22070/servicenow-mcp/discussions)
-- **Documentation**: [Wiki](https://github.com/mady22070/servicenow-mcp/wiki)
-
-## 🗺️ Roadmap
-
-- [ ] GraphQL API support
-- [ ] Advanced workflow automation
-- [ ] Machine learning integration
-- [ ] Performance optimization tools
-- [ ] Extended ITOM capabilities
-- [ ] Custom app scaffolding templates
-
----
-
-**Made with ❤️ for the ServiceNow community**
+MIT — see [LICENSE](LICENSE).
