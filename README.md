@@ -71,6 +71,33 @@ Tools are grouped into packs by domain:
 | Knowledge | docs search, knowledge base, RAG search |
 | Security | governance, impersonation, events |
 
+## Running with Docker
+
+If you don't want to deal with Python environments, you can run the server inside Docker instead.
+
+1. Make sure you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+
+2. Copy `.env.example` to `.env` and fill in your ServiceNow credentials:
+   ```bash
+   cp .env.example .env
+   # then open .env and set SERVICENOW_INSTANCE_URL, SERVICENOW_USERNAME, SERVICENOW_PASSWORD
+   ```
+
+3. Build and start the container:
+   ```bash
+   docker-compose up --build
+   ```
+   The first run will take a minute to download and build everything. After that it's fast.
+
+4. To stop it:
+   ```bash
+   docker-compose down
+   ```
+
+That's it. Logs are saved to a `logs/` folder in the project directory.
+
+> If you want to use it with Claude Desktop, you still need to run it via `python -m servicenow_mcp` (the Claude Desktop integration talks over stdin/stdout, not HTTP). Docker is more useful if you're running this as a standalone service or testing it independently.
+
 ## Running tests
 
 ```bash
