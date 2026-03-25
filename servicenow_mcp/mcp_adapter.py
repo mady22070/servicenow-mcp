@@ -104,8 +104,13 @@ from .packs import (
     servicenow_docs_pack,
     docs_pack,
     knowledge_pack,
-    rag_knowledge_pack,  # RAG-enhanced knowledge management
 )
+try:
+    from .packs import rag_knowledge_pack
+    _RAG_PACK_AVAILABLE = True
+except Exception:
+    rag_knowledge_pack = None
+    _RAG_PACK_AVAILABLE = False
 
 # Security and Governance Packs
 from .packs import (
@@ -115,7 +120,12 @@ from .packs import (
 )
 
 # Multi-Modal Content Processing Pack
-from .packs.multimodal_pack import MultiModalPack
+try:
+    from .packs.multimodal_pack import MultiModalPack
+    _MULTIMODAL_AVAILABLE = True
+except Exception:
+    MultiModalPack = None
+    _MULTIMODAL_AVAILABLE = False
 from .utils.plan import execute_plan as _execute_plan
 from .utils.guard import is_allowed as _guard
 from .utils.workspace import list_workspaces as _ws_list, get_workspace as _ws_get, set_workspace as _ws_set
@@ -2710,8 +2720,8 @@ def get_ui_management_documentation(env: str = "dev"):
 
 # ---- Multi-Modal Content Processing Tools ----
 
-# Initialize multimodal pack
-multimodal_pack = MultiModalPack()
+# Initialize multimodal pack (optional — requires Pillow and related deps)
+multimodal_pack = MultiModalPack() if _MULTIMODAL_AVAILABLE else None
 
 @mcp.tool()
 async def analyze_screenshot(image_data: str, analysis_options: Dict[str, Any] = None):

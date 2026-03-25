@@ -9,19 +9,24 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
-from ..knowledge import (
-    KnowledgeIngestionPipeline, RecommendationEngine, ConflictResolver,
-    SourceManager, KnowledgeProcessor
-)
-from ..knowledge.realtime_updater import RealtimeKnowledgeUpdater
-from ..knowledge.maintenance_system import KnowledgeMaintenanceSystem
-from ..knowledge.models import (
-    RecommendationContext, KnowledgeSource, KnowledgeSourceType,
-    AuthorityLevel, IngestionResult
-)
-from ..vector_db import VectorDBConfig
-
 logger = logging.getLogger(__name__)
+
+try:
+    from ..knowledge import (
+        KnowledgeIngestionPipeline, RecommendationEngine, ConflictResolver,
+        SourceManager, KnowledgeProcessor
+    )
+    from ..knowledge.realtime_updater import RealtimeKnowledgeUpdater
+    from ..knowledge.maintenance_system import KnowledgeMaintenanceSystem
+    from ..knowledge.models import (
+        RecommendationContext, KnowledgeSource, KnowledgeSourceType,
+        AuthorityLevel, IngestionResult
+    )
+    from ..vector_db import VectorDBConfig
+    _RAG_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"RAG/knowledge dependencies not fully available: {e}")
+    _RAG_AVAILABLE = False
 
 
 class RAGKnowledgePack:

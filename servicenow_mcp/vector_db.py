@@ -14,17 +14,30 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 
-try:
-    import chromadb
-    from chromadb.config import Settings
-    from sentence_transformers import SentenceTransformer
-    import openai
-    DEPENDENCIES_AVAILABLE = True
-except ImportError:
-    DEPENDENCIES_AVAILABLE = False
-    chromadb = None
-    SentenceTransformer = None
-    openai = None
+# Heavy dependencies are imported lazily inside functions that need them.
+# This keeps server startup fast even when chromadb/sentence-transformers
+# aren't installed or have version conflicts.
+chromadb = None
+SentenceTransformer = None
+openai = None
+DEPENDENCIES_AVAILABLE = False
+
+def _load_rag_deps():
+    """Try to import RAG dependencies. Returns True if all available."""
+    global chromadb, SentenceTransformer, openai, DEPENDENCIES_AVAILABLE
+    if DEPENDENCIES_AVAILABLE:
+        return True
+    try:
+        import chromadb as _chromadb
+        from sentence_transformers import SentenceTransformer as _ST
+        import openai as _openai
+        chromadb = _chromadb
+        SentenceTransformer = _ST
+        openai = _openai
+        DEPENDENCIES_AVAILABLE = True
+        return True
+    except Exception:
+        return False
 
 logger = logging.getLogger(__name__)
 
