@@ -203,6 +203,33 @@ mcp = FastMCP(
     port=int(os.getenv("MCP_PORT", "8000")),
 )
 
+# Wire up real-time activity tracking on every tool call.
+# We wrap ToolManager.call_tool so every tool — regardless of which pack
+# it lives in — is recorded automatically with no changes to individual tools.
+from .activity_tracker import tracker as _activity_tracker
+
+_orig_call_tool = mcp._tool_manager.call_tool
+
+async def _tracked_call_tool(name, arguments, context=None, convert_result=False):
+    session_id = "unknown"
+    try:
+        if context is not None:
+            req = getattr(getattr(context, "request_context", None), "request", None)
+            if req is not None:
+                session_id = req.headers.get("mcp-session-id", "unknown")
+    except Exception:
+        pass
+    event_id = _activity_tracker.record_start(session_id, name)
+    try:
+        result = await _orig_call_tool(name, arguments, context, convert_result)
+        _activity_tracker.record_end(event_id)
+        return result
+    except Exception as exc:
+        _activity_tracker.record_end(event_id, error=str(exc))
+        raise
+
+mcp._tool_manager.call_tool = _tracked_call_tool
+
 # Server info
 SERVER_INFO = ServerInfo(
     name="servicenow-mcp",
